@@ -46,6 +46,8 @@ SSH_PORT="22"
 AUTH_MODE=""          # "key" or "password"
 SSH_KEY_PATH=""       # used if AUTH_MODE=key (optional)
 VERIFY=1
+CONTAINER=""          # systemd-nspawn container name (e.g. "qcore")
+VERIFY_TLS=""         # optional host:port for end-to-end TLS check
 CONNECT_TIMEOUT=8
 
 # In-memory secrets
@@ -67,6 +69,10 @@ Optional:
   --auth key              Use SSH key auth
   --auth password         Use password SSH auth (requires sshpass)
   --key <path>            SSH private key path (for --auth key)
+  --container <name>      Also install cert into a systemd-nspawn container
+                          on each host (e.g. --container qcore)
+  --verify-tls <h:p>     End-to-end TLS check against host:port after install
+                          (e.g. --verify-tls stratusdatacore.qumulotest.local:443)
   --no-verify             Skip verification step
   --timeout <sec>         SSH connect timeout (default: $CONNECT_TIMEOUT)
   --help                  Show help
@@ -97,6 +103,8 @@ parse_args() {
       --port) SSH_PORT="${2:-}"; shift 2 ;;
       --auth) AUTH_MODE="${2:-}"; shift 2 ;;
       --key) SSH_KEY_PATH="${2:-}"; shift 2 ;;
+      --container) CONTAINER="${2:-}"; shift 2 ;;
+      --verify-tls) VERIFY_TLS="${2:-}"; shift 2 ;;
       --no-verify) VERIFY=0; shift 1 ;;
       --timeout) CONNECT_TIMEOUT="${2:-}"; shift 2 ;;
       --help|-h) usage; exit 0 ;;
@@ -293,9 +301,64 @@ openssl x509 -in "$DST" -noout -subject -fingerprint -sha256
 
 # Clean up stale temp file from older script versions
 rm -f /tmp/company-lab-root-ca.crt
+
+# Install into systemd-nspawn container if requested
+CONTAINER="__CONTAINER__"
+VERIFY_TLS_EP="__VERIFY_TLS__"
+if [ -n "$CONTAINER" ]; then
+  echo ""
+  echo "Installing CA cert into nspawn container: $CONTAINER"
+  if machinectl status "$CONTAINER" >/dev/null 2>&1; then
+    LEADER=$(machinectl show "$CONTAINER" -p Leader --value)
+
+    machinectl copy-to "$CONTAINER" "$DST" "$DST"
+
+    nsenter -t "$LEADER" -m -p -u -- bash -c \
+      "chmod 0644 '$DST' && update-ca-certificates >/dev/null"
+
+    # Verify the cert actually landed in the trust store
+    if nsenter -t "$LEADER" -m -p -u -- ls /etc/ssl/certs/ | grep -qi company-lab-root-ca; then
+      echo "Installed in container $CONTAINER: $DST"
+      nsenter -t "$LEADER" -m -p -u -- \
+        openssl x509 -in "$DST" -noout -subject -fingerprint -sha256
+    else
+      echo "ERROR: cert not found in container trust store after update-ca-certificates" >&2
+      exit 1
+    fi
+
+    # End-to-end TLS check inside the container
+    if [ -n "$VERIFY_TLS_EP" ]; then
+      echo ""
+      echo "TLS verify (container $CONTAINER -> $VERIFY_TLS_EP):"
+      if nsenter -t "$LEADER" -m -p -u -n -- bash -c \
+        "echo | openssl s_client -connect '$VERIFY_TLS_EP' -verify_return_error -brief 2>&1 | head -3"; then
+        echo "TLS OK (container)"
+      else
+        echo "ERROR: TLS verification failed inside container $CONTAINER" >&2
+        exit 1
+      fi
+    fi
+  else
+    echo "WARNING: container '$CONTAINER' is not running — skipped" >&2
+  fi
+fi
+
+# End-to-end TLS check on the host
+if [ -n "$VERIFY_TLS_EP" ]; then
+  echo ""
+  echo "TLS verify (host -> $VERIFY_TLS_EP):"
+  if echo | openssl s_client -connect "$VERIFY_TLS_EP" -verify_return_error -brief 2>&1 | head -3; then
+    echo "TLS OK (host)"
+  else
+    echo "ERROR: TLS verification failed on host" >&2
+    exit 1
+  fi
+fi
 RSCRIPT
 )"
   root_script="${root_script/__B64_CERT__/$b64_cert}"
+  root_script="${root_script/__CONTAINER__/$CONTAINER}"
+  root_script="${root_script/__VERIFY_TLS__/$VERIFY_TLS}"
 
   run_remote_sudo_script "$host" "$root_script"
 
@@ -322,6 +385,8 @@ main() {
   info "SSH port:           $SSH_PORT"
   info "Auth mode:          $AUTH_MODE"
   [[ "$AUTH_MODE" == "key" && -n "$SSH_KEY_PATH" ]] && info "SSH key:            $SSH_KEY_PATH"
+  [[ -n "$CONTAINER" ]] && info "nspawn container:   $CONTAINER" || info "nspawn container:   (none)"
+  [[ -n "$VERIFY_TLS" ]] && info "TLS endpoint:       $VERIFY_TLS" || info "TLS endpoint:       (none)"
   [[ "$VERIFY" -eq 1 ]] && info "Verification:       enabled" || info "Verification:       disabled"
 
   local total=0 ok=0 fail=0
