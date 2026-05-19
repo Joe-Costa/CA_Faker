@@ -13,10 +13,10 @@
 #   ca/ca.key.pem          (root CA private key - protect!)
 #
 # Example:
-#   sudo ./configure_clusterA_qumulo_tls_ubuntu.sh \
+#   ./CA_Faker.sh \
 #     --cn datacore.company.com \
 #     --san "dns:datacore.company.com,dns:*.datacore.company.com" \
-#     --out-dir /root/qumulo-tls
+#     --out-dir ./qumulo-tls
 #
 # Notes:
 # - Qumulo expects certbundle ordering: leaf -> intermediate(s) -> root.
@@ -27,7 +27,7 @@ set -euo pipefail
 # ---- defaults ----
 CN=""  # REQUIRED runtime flag
 SAN_LIST=""  # defaults to dns:$CN if not provided
-OUT_DIR="/root/qumulo-tls"
+OUT_DIR="./qumulo-tls"
 CA_NAME="Company Lab Root CA"
 CA_ORG="Company Lab"
 CA_COUNTRY="US"
@@ -154,10 +154,6 @@ EOF
 }
 
 main() {
-  if [[ "$(id -u)" -ne 0 ]]; then
-    err "Run as root"; exit 1
-  fi
-
   need_cmd openssl
   need_cmd sed
 

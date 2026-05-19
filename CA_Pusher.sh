@@ -23,9 +23,9 @@
 #       sudo apt-get update && sudo apt-get install -y sshpass
 #
 # Usage:
-#   sudo ./push_ca_trust_to_clusterB_ubuntu.sh \
+#   ./CA_Pusher.sh \
 #     --clients ./clusterB_hosts.txt \
-#     --ca /root/qumulo-tls
+#     --ca ./qumulo-tls
 #
 # Clients file format:
 #   One host/IP/FQDN per line. Blank lines and lines starting with # are ignored.
@@ -64,7 +64,7 @@ Required:
                           CA cert is expected at: <dir>/ca/ca.crt.pem
 
 Optional:
-  --user <name>           SSH username (if omitted, will prompt)
+  --ssh-user <name>           SSH username (if omitted, will prompt)
   --port <n>              SSH port (default: $SSH_PORT)
   --auth key              Use SSH key auth
   --auth password         Use password SSH auth (requires sshpass)
@@ -99,7 +99,7 @@ parse_args() {
     case "$1" in
       --clients) CLIENTS_FILE="${2:-}"; shift 2 ;;
       --ca) CA_DIR="${2:-}"; shift 2 ;;
-      --user) SSH_USER="${2:-}"; shift 2 ;;
+      --ssh-user) SSH_USER="${2:-}"; shift 2 ;;
       --port) SSH_PORT="${2:-}"; shift 2 ;;
       --auth) AUTH_MODE="${2:-}"; shift 2 ;;
       --key) SSH_KEY_PATH="${2:-}"; shift 2 ;;
@@ -392,7 +392,7 @@ main() {
   local total=0 ok=0 fail=0
   local failures=()
 
-  while IFS= read -r host <&3; do
+  while IFS= read -r host <&3 || [[ -n "$host" ]]; do
     host="$(echo "$host" | sed -e 's/#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [[ -z "$host" ]] && continue
 
