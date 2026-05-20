@@ -20,7 +20,8 @@ Admin machine (where you run the scripts):
 - sshpass (only if using password-based SSH auth)
 
 Remote nodes (targets of CA_Pusher.sh):
-- Ubuntu with a sudo-capable SSH user
+- **Ubuntu target machine** with a sudo-capable SSH user
+- This process currently does nto support any other Linux distros or OS'es as targets
 - Optional: systemd-nspawn container (e.g. `qcore`)
 
 ## Quick Start
