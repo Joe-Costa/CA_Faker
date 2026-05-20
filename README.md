@@ -3,6 +3,8 @@
 Generate a self-signed CA and server certificate, push the CA trust to remote
 Ubuntu nodes (and their nspawn containers), and apply TLS to a Qumulo cluster.
 
+**  * * NOTE * * This process is meant for lab and testing use only, do not use in production!!**
+
 ## How It Works
 
 Both scripts run from any admin machine (your laptop, a jump box, etc.) —
