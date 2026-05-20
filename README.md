@@ -136,7 +136,11 @@ qq ssl_modify_certificate \
 ## Manual Testing
 
 The `--verify-tls` flag handles end-to-end verification automatically. The
-commands below are useful for debugging if something goes wrong.
+commands below are useful for debugging if something goes wrong.  
+
+If you have already applied the certs to a Qumulo cluster via `qq` then you can use
+it as a verfication target from your non-Qumulo clients that received the self-trusted
+CA certs via CA_Pusher.sh using port 443 or 9000
 
 Verify the certificate chain locally:
 
